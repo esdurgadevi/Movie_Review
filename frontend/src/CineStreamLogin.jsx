@@ -1,30 +1,53 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaUser, FaLock, FaEnvelope, FaGoogle, FaEye, FaEyeSlash, FaCalendarAlt, FaUserTag } from 'react-icons/fa';
+import { 
+  User, 
+  Lock, 
+  Mail, 
+  Calendar,
+  Eye, 
+  EyeOff,
+  Film,
+  Shield
+} from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import MovieListUser from './MovieListUser';
+import MovieListAdmin from './MovieListAdmin';
+
+// Utility function to decode JWT token
+const decodeJWT = (token) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Error decoding JWT:', error);
+    return null;
+  }
+};
 
 const CineStreamLogin = () => {
   const [activeTab, setActiveTab] = useState('login');
   const [loginType, setLoginType] = useState('user');
   const [formData, setFormData] = useState({
-    // Login fields
     email: '',
     password: '',
-    
-    // Registration fields
     username: '',
     name: '',
     age: '',
-    
-    // OTP verification
     otp: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+  const [userId, setUserId] = useState(null);
 
-  // Handle input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -33,7 +56,7 @@ const CineStreamLogin = () => {
     }));
   };
 
-  // Handle login
+  // Handle login - UPDATED
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -46,7 +69,8 @@ const CineStreamLogin = () => {
         },
         body: JSON.stringify({
           email: formData.email,
-          password: formData.password
+          password: formData.password,
+          role: loginType
         })
       });
       
@@ -54,16 +78,32 @@ const CineStreamLogin = () => {
       
       if (response.ok) {
         toast.success(`Welcome back, ${loginType === 'admin' ? 'Admin' : 'User'}!`);
-        // Store token and redirect to movie list
+        
+        // Decode token to get userId
+        const decodedToken = decodeJWT(data.token);
+        const userId = decodedToken?.userId;
+        
+        if (!userId) {
+          toast.error('Unable to get user information');
+          return;
+        }
+
+        console.log('Login successful - User ID:', userId, 'Role:', data.role);
+        
+        // Store user data
+        setUserRole(data.role);
+        setUserId(userId);
+        setIsLoggedIn(true);
+        
         localStorage.setItem('token', data.token);
-        localStorage.setItem('userType', loginType);
-        setTimeout(() => {
-          window.location.href = '/movielist';
-        }, 1500);
+        localStorage.setItem('userRole', data.role);
+        localStorage.setItem('userId', userId);
+        
       } else {
         toast.error(data.message || 'Login failed');
       }
     } catch (error) {
+      console.error('Login error:', error);
       toast.error('Network error. Please try again.');
     } finally {
       setIsLoading(false);
@@ -86,7 +126,8 @@ const CineStreamLogin = () => {
           email: formData.email,
           password: formData.password,
           name: formData.name,
-          age: parseInt(formData.age)
+          age: parseInt(formData.age),
+          role: 'user'
         })
       });
       
@@ -128,7 +169,6 @@ const CineStreamLogin = () => {
         toast.success('Email verified successfully! You can now login.');
         setOtpSent(false);
         setActiveTab('login');
-        // Reset form
         setFormData({
           email: '', password: '', username: '', name: '', age: '', otp: ''
         });
@@ -142,18 +182,77 @@ const CineStreamLogin = () => {
     }
   };
 
-  // Handle Google login
-  const handleGoogleLogin = () => {
-    // This would typically integrate with Google OAuth
-    // For now, we'll show a message
-    toast.info('Google login would be implemented with OAuth');
+  // Handle logout
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserRole(null);
+    setUserId(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userId');
+    toast.info('Logged out successfully');
   };
 
-  // Toggle password visibility
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
+  // Check if user is already logged in on component mount
+  React.useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUserRole = localStorage.getItem('userRole');
+    const storedUserId = localStorage.getItem('userId');
+    
+    if (token && storedUserRole && storedUserId) {
+      setIsLoggedIn(true);
+      setUserRole(storedUserRole);
+      setUserId(storedUserId);
+    }
+  }, []);
+
+  // If user is logged in, render the appropriate component
+  if (isLoggedIn && userRole && userId) {
+    console.log('Rendering dashboard - User ID:', userId, 'Role:', userRole);
+    
+    return (
+      <div className="min-h-screen bg-gray-900">
+        <ToastContainer 
+          position="top-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="dark"
+        />
+        
+        {/* Logout Button */}
+        <div className="fixed top-4 right-4 z-50">
+          <motion.button
+            onClick={handleLogout}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-lg"
+          >
+            <User size={16} />
+            Logout ({userRole})
+          </motion.button>
+        </div>
+
+        {/* Render appropriate component based on role */}
+        {userRole === 'admin' ? (
+          <MovieListAdmin userId={userId} />
+        ) : (
+          <MovieListUser userId={userId} />
+        )}
+      </div>
+    );
+  }
+
+  // Login/Register UI (same as before)
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-4">
       <ToastContainer 
@@ -173,24 +272,41 @@ const CineStreamLogin = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden w-full max-w-md"
+        className="bg-gray-800 bg-opacity-50 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden w-full max-w-md border border-gray-700"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-blue-500 p-6 text-center">
-          <h1 className="text-3xl font-bold text-white">CineStream</h1>
-          <p className="text-gray-200 mt-2">Your Ultimate Movie Review Destination</p>
+        <div className="bg-gradient-to-r from-red-600 to-purple-600 p-6 text-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-black bg-opacity-20"></div>
+          <div className="relative z-10">
+            <motion.h1 
+              className="text-3xl font-bold text-white flex items-center justify-center gap-2"
+              whileHover={{ scale: 1.05 }}
+            >
+              <Film size={32} />
+              CineStream
+            </motion.h1>
+            <p className="text-gray-200 mt-2 opacity-90">Your Ultimate Movie Destination</p>
+          </div>
         </div>
         
         {/* Tabs */}
-        <div className="flex border-b border-gray-700">
+        <div className="flex border-b border-gray-700 bg-gray-900 bg-opacity-50">
           <button
-            className={`flex-1 py-4 font-medium ${activeTab === 'login' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-400'}`}
+            className={`flex-1 py-4 font-medium transition-all ${
+              activeTab === 'login' 
+                ? 'text-red-400 border-b-2 border-red-400 bg-red-500 bg-opacity-10' 
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
             onClick={() => setActiveTab('login')}
           >
             Login
           </button>
           <button
-            className={`flex-1 py-4 font-medium ${activeTab === 'register' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-400'}`}
+            className={`flex-1 py-4 font-medium transition-all ${
+              activeTab === 'register' 
+                ? 'text-red-400 border-b-2 border-red-400 bg-red-500 bg-opacity-10' 
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
             onClick={() => setActiveTab('register')}
           >
             Register
@@ -209,37 +325,45 @@ const CineStreamLogin = () => {
                 transition={{ duration: 0.3 }}
               >
                 {/* Login Type Selector */}
-                <div className="flex mb-6 bg-gray-700 rounded-lg p-1">
+                <div className="flex mb-6 bg-gray-700 rounded-lg p-1 border border-gray-600">
                   <button
-                    className={`flex-1 py-2 rounded-md flex items-center justify-center ${loginType === 'user' ? 'bg-purple-600 text-white' : 'text-gray-300'}`}
+                    className={`flex-1 py-2 rounded-md flex items-center justify-center gap-2 transition-all ${
+                      loginType === 'user' 
+                        ? 'bg-red-600 text-white shadow-lg' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
                     onClick={() => setLoginType('user')}
                   >
-                    <FaUser className="mr-2" />
-                    User Login
+                    <User size={16} />
+                    User
                   </button>
                   <button
-                    className={`flex-1 py-2 rounded-md flex items-center justify-center ${loginType === 'admin' ? 'bg-purple-600 text-white' : 'text-gray-300'}`}
+                    className={`flex-1 py-2 rounded-md flex items-center justify-center gap-2 transition-all ${
+                      loginType === 'admin' 
+                        ? 'bg-red-600 text-white shadow-lg' 
+                        : 'text-gray-300 hover:text-white'
+                    }`}
                     onClick={() => setLoginType('admin')}
                   >
-                    <FaUserTag className="mr-2" />
-                    Admin Login
+                    <Shield size={16} />
+                    Admin
                   </button>
                 </div>
                 
                 {/* Login Form */}
                 <form onSubmit={handleLogin}>
                   <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Email</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Email</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaEnvelope className="text-gray-400" />
+                        <Mail size={18} className="text-gray-400" />
                       </div>
                       <input
                         type="email"
                         name="email"
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                         placeholder="Enter your email"
                         required
                       />
@@ -247,62 +371,51 @@ const CineStreamLogin = () => {
                   </div>
                   
                   <div className="mb-6">
-                    <label className="block text-gray-300 mb-2">Password</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Password</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaLock className="text-gray-400" />
+                        <Lock size={18} className="text-gray-400" />
                       </div>
                       <input
                         type={showPassword ? "text" : "password"}
                         name="password"
                         value={formData.password}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-10 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-10 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                         placeholder="Enter your password"
                         required
                       />
                       <button
                         type="button"
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-red-400 transition-colors"
                         onClick={togglePasswordVisibility}
                       >
                         {showPassword ? (
-                          <FaEyeSlash className="text-gray-400" />
+                          <EyeOff size={18} className="text-gray-400" />
                         ) : (
-                          <FaEye className="text-gray-400" />
+                          <Eye size={18} className="text-gray-400" />
                         )}
                       </button>
                     </div>
                   </div>
                   
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-medium transition duration-300 flex items-center justify-center"
+                    whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                    whileTap={{ scale: isLoading ? 1 : 0.98 }}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
                     ) : (
-                      `Login as ${loginType === 'admin' ? 'Admin' : 'User'}`
+                      <>
+                        <User size={18} />
+                        Login as {loginType === 'admin' ? 'Admin' : 'User'}
+                      </>
                     )}
-                  </button>
+                  </motion.button>
                 </form>
-                
-                {/* Divider */}
-                <div className="flex items-center my-6">
-                  <div className="flex-1 border-t border-gray-600"></div>
-                  <div className="px-3 text-gray-400">or</div>
-                  <div className="flex-1 border-t border-gray-600"></div>
-                </div>
-                
-                {/* Google Login */}
-                <button
-                  onClick={handleGoogleLogin}
-                  className="w-full bg-white hover:bg-gray-100 text-gray-800 py-2 rounded-lg font-medium transition duration-300 flex items-center justify-center"
-                >
-                  <FaGoogle className="text-red-500 mr-2" />
-                  Continue with Google
-                </button>
               </motion.div>
             )}
             
@@ -319,17 +432,17 @@ const CineStreamLogin = () => {
                 {/* Registration Form */}
                 <form onSubmit={handleRegister}>
                   <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Username</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Username</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaUser className="text-gray-400" />
+                        <User size={18} className="text-gray-400" />
                       </div>
                       <input
                         type="text"
                         name="username"
                         value={formData.username}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                         placeholder="Choose a username"
                         required
                       />
@@ -337,30 +450,30 @@ const CineStreamLogin = () => {
                   </div>
                   
                   <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Full Name</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Full Name</label>
                     <input
                       type="text"
                       name="name"
                       value={formData.name}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                       placeholder="Enter your full name"
                       required
                     />
                   </div>
                   
                   <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Email</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Email</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaEnvelope className="text-gray-400" />
+                        <Mail size={18} className="text-gray-400" />
                       </div>
                       <input
                         type="email"
                         name="email"
                         value={formData.email}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                         placeholder="Enter your email"
                         required
                       />
@@ -368,17 +481,17 @@ const CineStreamLogin = () => {
                   </div>
                   
                   <div className="mb-4">
-                    <label className="block text-gray-300 mb-2">Age</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Age</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaCalendarAlt className="text-gray-400" />
+                        <Calendar size={18} className="text-gray-400" />
                       </div>
                       <input
                         type="number"
                         name="age"
                         value={formData.age}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                         placeholder="Enter your age"
                         min="1"
                         required
@@ -387,45 +500,50 @@ const CineStreamLogin = () => {
                   </div>
                   
                   <div className="mb-6">
-                    <label className="block text-gray-300 mb-2">Password</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Password</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FaLock className="text-gray-400" />
+                        <Lock size={18} className="text-gray-400" />
                       </div>
                       <input
                         type={showPassword ? "text" : "password"}
                         name="password"
                         value={formData.password}
                         onChange={handleInputChange}
-                        className="w-full pl-10 pr-10 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full pl-10 pr-10 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                         placeholder="Create a password"
                         required
                       />
                       <button
                         type="button"
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-red-400 transition-colors"
                         onClick={togglePasswordVisibility}
                       >
                         {showPassword ? (
-                          <FaEyeSlash className="text-gray-400" />
+                          <EyeOff size={18} className="text-gray-400" />
                         ) : (
-                          <FaEye className="text-gray-400" />
+                          <Eye size={18} className="text-gray-400" />
                         )}
                       </button>
                     </div>
                   </div>
                   
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-medium transition duration-300 flex items-center justify-center"
+                    whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                    whileTap={{ scale: isLoading ? 1 : 0.98 }}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
                     ) : (
-                      'Create Account'
+                      <>
+                        <User size={18} />
+                        Create Account
+                      </>
                     )}
-                  </button>
+                  </motion.button>
                 </form>
               </motion.div>
             )}
@@ -439,41 +557,44 @@ const CineStreamLogin = () => {
                 transition={{ duration: 0.3 }}
               >
                 <h3 className="text-xl font-semibold text-white mb-2 text-center">Verify Your Email</h3>
-                <p className="text-gray-300 text-center mb-6">
-                  We've sent a verification code to {formData.email}
+                <p className="text-gray-300 text-center mb-6 text-sm">
+                  We've sent a verification code to <br />
+                  <span className="text-red-400 font-medium">{formData.email}</span>
                 </p>
                 
                 <form onSubmit={handleVerifyOtp}>
                   <div className="mb-6">
-                    <label className="block text-gray-300 mb-2">Enter OTP</label>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Enter OTP Code</label>
                     <input
                       type="text"
                       name="otp"
                       value={formData.otp}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-xl tracking-widest"
+                      className="w-full px-3 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 text-center text-xl tracking-widest font-mono"
                       placeholder="000000"
                       maxLength="6"
                       required
                     />
                   </div>
                   
-                  <button
+                  <motion.button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-medium transition duration-300 flex items-center justify-center"
+                    whileHover={{ scale: isLoading ? 1 : 1.02 }}
+                    whileTap={{ scale: isLoading ? 1 : 0.98 }}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? (
                       <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
                     ) : (
                       'Verify OTP'
                     )}
-                  </button>
+                  </motion.button>
                   
                   <button
                     type="button"
                     onClick={() => setOtpSent(false)}
-                    className="w-full mt-3 bg-gray-600 hover:bg-gray-700 text-white py-2 rounded-lg font-medium transition duration-300"
+                    className="w-full mt-3 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-medium transition-all border border-gray-600"
                   >
                     Back to Registration
                   </button>
@@ -484,8 +605,8 @@ const CineStreamLogin = () => {
         </div>
         
         {/* Footer */}
-        <div className="bg-gray-900 p-4 text-center text-gray-400 text-sm">
-          © 2023 CineStream. All rights reserved.
+        <div className="bg-gray-900 bg-opacity-50 p-4 text-center text-gray-400 text-sm border-t border-gray-700">
+          © 2024 CineStream. All rights reserved.
         </div>
       </motion.div>
     </div>

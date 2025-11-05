@@ -51,6 +51,7 @@ export const verifyOTP = async (req, res) => {
 };
 
 // Login user (plain text comparison)
+// Updated login controller - return userId in response
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
@@ -72,7 +73,12 @@ export const loginUser = async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    res.json({ message: "Login successful", token, role: user.role });
+    res.json({ 
+      message: "Login successful", 
+      token, 
+      role: user.role,
+      userId: user._id // Add this line
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
